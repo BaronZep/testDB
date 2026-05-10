@@ -1,8 +1,0 @@
-name = "testdb"
-pages_build_output_dir = "public"
-compatibility_date = "2026-05-10"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "contact-db"
-database_id = "25b2cf52-fb64-4c62-b3c9-97f60957aee5" 
