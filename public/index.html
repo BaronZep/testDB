@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carnet de Contacts</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; background: #f9fafb; color: #111827; }
+        h1 { border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+
+        .form-container { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        input { padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; width: 100%; box-sizing: border-box; }
+
+        button { background: #2563eb; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 500; }
+        button:hover { background: #1d4ed8; }
+        .btn-cancel { background: #6b7280; display: none; }
+        .btn-cancel:hover { background: #4b5563; }
+        .btn-delete { background: #ef4444; padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn-delete:hover { background: #dc2626; }
+        .btn-edit { background: #f59e0b; padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn-edit:hover { background: #d97706; }
+
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f3f4f6; font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <h1>Carnet d'adresses (Cloudflare D1)</h1>
+
+    <div class="form-container">
+        <h3 id="form-title" style="margin-top:0;">Ajouter un contact</h3>
+        <input type="hidden" id="contact-id">
+        <div class="form-grid">
+            <input type="text" id="prenom" placeholder="Prénom" required>
+            <input type="text" id="nom" placeholder="Nom" required>
+            <input type="text" id="adresse" placeholder="Adresse complète">
+            <input type="text" id="telephone" placeholder="Numéro de téléphone">
+        </div>
+        <button onclick="saveContact()" id="save-btn">Ajouter le contact</button>
+        <button onclick="resetForm()" class="btn-cancel" id="cancel-btn">Annuler la modification</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Prénom</th>
+                <th>Nom</th>
+                <th>Adresse</th>
+                <th>Téléphone</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="contacts-body">
+            <tr><td colspan="5">Chargement...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        // 1. LECTURE - Charger le tableau
+        async function loadContacts() {
+            try {
+                const res = await fetch('/api/contacts');
+                const contacts = await res.json();
+                const tbody = document.getElementById('contacts-body');
+
+                if (contacts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucun contact trouvé.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                contacts.forEach(c => {
+                    // Sécurisation basique des chaînes pour les injecter dans la fonction onclick
+                    const p = c.prenom ? c.prenom.replace(/'/g, "\'") : '';
+                    const n = c.nom ? c.nom.replace(/'/g, "\'") : '';
+                    const a = c.adresse ? c.adresse.replace(/'/g, "\'") : '';
+                    const t = c.telephone ? c.telephone.replace(/'/g, "\'") : '';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${c.prenom}</td>
+                        <td>${c.nom}</td>
+                        <td>${c.adresse}</td>
+                        <td>${c.telephone}</td>
+                        <td>
+                            <button class="btn-edit" onclick="editContact(${c.id}, '${p}', '${n}', '${a}', '${t}')">Modifier</button>
+                            <button class="btn-delete" onclick="deleteContact(${c.id})">Supprimer</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                document.getElementById('contacts-body').innerHTML = '<tr><td colspan="5" style="color:red;">Erreur de connexion à la base de données. As-tu bien configuré la liaison (Binding) ?</td></tr>';
+            }
+        }
+
+        // 2. CRÉATION & MODIFICATION
+        async function saveContact() {
+            const id = document.getElementById('contact-id').value;
+            const prenom = document.getElementById('prenom').value;
+            const nom = document.getElementById('nom').value;
+            const adresse = document.getElementById('adresse').value;
+            const telephone = document.getElementById('telephone').value;
+
+            if(!prenom || !nom) return alert("Le prénom et le nom sont obligatoires !");
+
+            const method = id ? 'PUT' : 'POST';
+            const payload = { prenom, nom, adresse, telephone };
+            if (id) payload.id = id;
+
+            await fetch('/api/contacts', {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            resetForm();
+            loadContacts();
+        }
+
+        // 3. SUPPRESSION
+        async function deleteContact(id) {
+            if(!confirm("Es-tu sûr de vouloir supprimer ce contact ?")) return;
+            await fetch('/api/contacts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            loadContacts();
+        }
+
+        // --- Fonctions d'Interface ---
+        function editContact(id, prenom, nom, adresse, telephone) {
+            document.getElementById('contact-id').value = id;
+            document.getElementById('prenom').value = prenom;
+            document.getElementById('nom').value = nom;
+            document.getElementById('adresse').value = adresse;
+            document.getElementById('telephone').value = telephone;
+
+            document.getElementById('form-title').innerText = "Modifier le contact";
+            document.getElementById('save-btn').innerText = "Enregistrer les modifications";
+            document.getElementById('cancel-btn').style.display = "inline-block";
+        }
+
+        function resetForm() {
+            document.getElementById('contact-id').value = '';
+            document.getElementById('prenom').value = '';
+            document.getElementById('nom').value = '';
+            document.getElementById('adresse').value = '';
+            document.getElementById('telephone').value = '';
+
+            document.getElementById('form-title').innerText = "Ajouter un contact";
+            document.getElementById('save-btn').innerText = "Ajouter le contact";
+            document.getElementById('cancel-btn').style.display = "none";
+        }
+
+        // Démarrage
+        loadContacts();
+    </script>
+</body>
+</html>
