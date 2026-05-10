@@ -33,5 +33,6 @@ export async function onRequest(context) {
         return Response.json({ success: true });
     }
 
+    
     return new Response("Méthode non autorisée", { status: 405 });
 }
